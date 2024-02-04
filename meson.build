@@ -5,6 +5,7 @@ project('cpp_crypto', 'cpp',
 exe = executable(
   'cpp_crypto', 
   ['main.cpp', 'bigint.cpp'],
+  link_args : ['-lgmp'], 
   cpp_args: ['-g', '-O3', '-mtune=native', '-march=native'], 
   install : true)
 

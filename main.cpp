@@ -1,11 +1,212 @@
-#include "bigint.hpp"
+//#include "bigint.hpp"
 
 #include <assert.h>
 #include <exception>
 #include <iostream>
 #include <stdlib.h>
 
-using ix = BigInt;
+#include "gmp-6.3.0/gmpxx.h"
+
+//using ix = BigInt;
+
+
+class GmpWrapper {
+public:
+    // Constructors
+    GmpWrapper() {
+        mpz_init(value_);
+    }
+
+    GmpWrapper(const char* str) {
+        mpz_init_set_str(value_, str, 10);
+    }
+
+    GmpWrapper(const GmpWrapper& other) {
+        mpz_init_set(value_, other.value_);
+    }
+
+    GmpWrapper(int intValue) {
+        mpz_init_set_si(value_, intValue);
+    }
+
+    // Destructor
+    ~GmpWrapper() {
+        mpz_clear(value_);
+    }
+
+    // Assignment operator
+    GmpWrapper& operator=(const GmpWrapper& other) {
+        if (this != &other) {
+            mpz_set(value_, other.value_);
+        }
+        return *this;
+    }
+
+    // Arithmetic operators
+    GmpWrapper operator+(const GmpWrapper& other) const {
+        GmpWrapper result;
+        mpz_add(result.value_, value_, other.value_);
+        return result;
+    }
+
+    GmpWrapper operator-(const GmpWrapper& other) const {
+        GmpWrapper result;
+        mpz_sub(result.value_, value_, other.value_);
+        return result;
+    }
+
+    GmpWrapper operator*(const GmpWrapper& other) const {
+        GmpWrapper result;
+        mpz_mul(result.value_, value_, other.value_);
+        return result;
+    }
+
+    GmpWrapper operator%(const GmpWrapper& other) const {
+        GmpWrapper result;
+        mpz_mod(result.value_, value_, other.value_);
+        return result;
+    }
+
+    GmpWrapper operator/(const GmpWrapper& other) const {
+        if (mpz_sgn(other.value_) == 0) {
+            // Handle division by zero
+            throw std::invalid_argument("Division by zero");
+        }
+
+        GmpWrapper result;
+        mpz_tdiv_q(result.value_, value_, other.value_);
+        return result;
+    }
+
+        // Bitwise AND operator
+    GmpWrapper operator&(const GmpWrapper& other) const {
+        GmpWrapper result;
+        mpz_and(result.value_, value_, other.value_);
+        return result;
+    }
+
+    // Bitwise OR operator
+    GmpWrapper operator|(const GmpWrapper& other) const {
+        GmpWrapper result;
+        mpz_ior(result.value_, value_, other.value_);
+        return result;
+    }
+
+    // Bitwise XOR operator
+    GmpWrapper operator^(const GmpWrapper& other) const {
+        GmpWrapper result;
+        mpz_xor(result.value_, value_, other.value_);
+        return result;
+    }
+
+    // Bitwise NOT operator
+    GmpWrapper operator~() const {
+        GmpWrapper result;
+        mpz_com(result.value_, value_);
+        return result;
+    }
+
+    GmpWrapper pow(unsigned int exp) const {
+        GmpWrapper result;
+        mpz_pow_ui(result.value_, value_, exp);
+        return result;
+    }
+  
+    unsigned char get_bit(size_t bitIndex) const {
+        return mpz_tstbit(value_, bitIndex);
+    }
+
+    size_t count_trailing_zeros() const {
+        return static_cast<size_t>(mpz_scan1(value_, 0));
+    }
+
+    size_t bitlength() const {
+        return static_cast<size_t>(mpz_sizeinbase(value_, 2));
+    }
+
+    void write() const {
+        char* str = mpz_get_str(nullptr, 10, value_);
+        std::cout << str;
+        free(str);
+    }
+
+        // Equality operator
+    bool operator==(const GmpWrapper& other) const {
+        return mpz_cmp(value_, other.value_) == 0;
+    }
+
+    // Inequality operator
+    bool operator!=(const GmpWrapper& other) const {
+        return mpz_cmp(value_, other.value_) != 0;
+    }
+
+    // Less than operator
+    bool operator<(const GmpWrapper& other) const {
+        return mpz_cmp(value_, other.value_) < 0;
+    }
+
+    // Less than or equal to operator
+    bool operator<=(const GmpWrapper& other) const {
+        return mpz_cmp(value_, other.value_) <= 0;
+    }
+
+    // Greater than operator
+    bool operator>(const GmpWrapper& other) const {
+        return mpz_cmp(value_, other.value_) > 0;
+    }
+
+    // Greater than or equal to operator
+    bool operator>=(const GmpWrapper& other) const {
+        return mpz_cmp(value_, other.value_) >= 0;
+    }
+
+        // Addition with int
+    GmpWrapper operator+(int intValue) const {
+        GmpWrapper n(intValue);
+        return this->operator+(n);
+    }
+
+    // Subtraction with int
+    GmpWrapper operator-(int intValue) const {
+        GmpWrapper n(intValue);
+        return this->operator-(n);
+    }
+
+    GmpWrapper operator-() const {
+        GmpWrapper result;
+        mpz_neg(result.value_, value_);
+        return result;
+    }
+
+    // Multiplication with int
+    GmpWrapper operator*(int intValue) const {
+        GmpWrapper result;
+        mpz_mul_si(result.value_, value_, intValue);
+        return result;
+    }
+
+    // Division with int
+    GmpWrapper operator/(int intValue) const {
+        if (intValue == 0) {
+            // Handle division by zero
+            throw std::invalid_argument("Division by zero");
+        }
+
+        GmpWrapper n(intValue);
+        return this->operator/(n);
+    }
+
+    // Output operator
+    friend std::ostream& operator<<(std::ostream& os, const GmpWrapper& gmp) {
+        return os << mpz_get_str(nullptr, 10, gmp.value_);
+    }
+
+private:
+    mpz_t value_;
+};
+
+using ix = GmpWrapper;
+
 
 ix
 ix_abs(const ix& _n)
@@ -38,7 +239,7 @@ divmod(const ix& _na, const ix& _nb) noexcept
   }
   if (_na < 0 && _nb < 0)
   {
-    return {_na / _nb, -1 * ((-_na) - ((-_na) / (-_nb)) * (-_nb))};
+    return {_na / _nb, ((-_na) - ((-_na) / (-_nb)) * (-_nb)) * -1};
   }
 
   return {0, 0};
@@ -83,7 +284,7 @@ mod(const ix& _na, const ix& _nb) noexcept
 {
   ix result = _na % _nb;
 
-  if (result < 0) [[unlikely]]
+  if (result < ix{0}) [[unlikely]]
   {
     return result + _nb;
   }
@@ -106,9 +307,9 @@ struct crv_p
   print() const
   {
     std::cout << "[";
-    x.write(std::cout);
+    x.write();
     std::cout << ", ";
-    y.write(std::cout);
+    y.write();
     std::cout << "]\n";
   }
 };
@@ -127,7 +328,7 @@ point_add(const crv_p& _p1, const crv_p& _p2, const ix& _p /* global modulo */) 
 point_double(const crv_p& _p1, const ix& _p) noexcept
 {
   const ix x2 = _p1.x;
-  ix s        = mod(((3 * _p1.x.pow(2)) * modinv(2 * _p1.y, _p)), _p);
+  ix s        = mod(((ix{3} * _p1.x.pow(2)) * modinv(ix{3} * _p1.y, _p)), _p);
   ix x3       = mod((s.pow(2) - _p1.x - x2), _p);
   ix y3       = mod((s * (_p1.x - x3) - _p1.y), _p);
 
