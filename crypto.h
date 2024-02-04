@@ -1,0 +1,5 @@
+
+
+namespace blue_crypto
+{
+}
