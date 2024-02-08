@@ -149,6 +149,8 @@ point_double(const jcbn_crv_p& _p1, const ix& _p)
   return out;
 }
 
+/* TODO: fix */
+
 jcbn_crv_p
 point_add(const jcbn_crv_p& _p1, const jcbn_crv_p& _p2, const ix& _p)
 {
@@ -162,7 +164,6 @@ point_add(const jcbn_crv_p& _p1, const jcbn_crv_p& _p2, const ix& _p)
 
   jcbn_crv_p out;
 
-  // out.x = mod(-(e.pow(3)) - (e.pow(2) * a * 2) + f, _p);
   out.x = (-e.pow(3) - 2 * a * e.pow(2) + f) % _p;
   out.y = -c * e.pow(3) + f * (a * e.pow(2) - out.x);
   out.z = (_p1.z * _p2.z * e) % _p;
