@@ -150,23 +150,22 @@ point_double(const jcbn_crv_p& _p1, const ix& _p)
 }
 
 /* TODO: fix */
-
 jcbn_crv_p
 point_add(const jcbn_crv_p& _p1, const jcbn_crv_p& _p2, const ix& _p)
 {
-  const ix a = mod(_p1.x * _p1.z.pow(2), _p);
-  const ix b = mod(_p2.x * _p1.z.pow(2), _p);
-  const ix c = mod(_p1.y * _p2.z.pow(3), _p);
-  const ix d = mod(_p2.y * _p1.z.pow(3), _p);
-
-  const ix e = mod(b - a, _p);
-  const ix f = mod(d - c, _p);
+  const ix U1 = _p1.x * _p2.z.pow(2);
+  const ix U2 = _p2.x * _p1.z.pow(2);
+  const ix S1 = _p1.y * _p2.z.pow(3);
+  const ix S2 = _p2.y * _p1.z.pow(3);
 
   jcbn_crv_p out;
 
-  out.x = (-e.pow(3) - 2 * a * e.pow(2) + f) % _p;
-  out.y = -c * e.pow(3) + f * (a * e.pow(2) - out.x);
-  out.z = (_p1.z * _p2.z * e) % _p;
+  const ix H = U2 - U1;
+  const ix R = S2 - S1;
+
+  out.x = (R.pow(2) - H.pow(3) - 2 * U1 * H.pow(2)) % _p;
+  out.y = (R * (U1 * H.pow(2) - out.x) - S1 * H.pow(3)) % _p;
+  out.z = (H * _p1.z * _p2.z) % _p;
 
   return out;
 }
@@ -258,6 +257,23 @@ double_and_add(const jcbn_crv_p& _p1, const ix& _num, const ix& _p)
   return _p3;
 }
 
+static constexpr std::size_t window_size = 4;
+
+jcbn_crv_p
+windowed_add(const std::vector<jcbn_crv_p>& _precomp, const jcbn_crv_p& _p1, const ix& _num, const ix& _p)
+{
+  jcbn_crv_p Q  = {0, 0, 1};
+  std::size_t m = bits_to_represent(_num) / window_size;
+
+  for (std::size_t i = m; i != 0; --i)
+  {
+    for (std::size_t j = 0; j != window_size; ++j)
+    {
+      Q = point_double(Q, _p);
+    }
+    if () }
+}
+
 /*
   BIG DISCLAIMER: UNFINISHED AND NOT TESTED!!!
 
@@ -278,38 +294,41 @@ main()
   ix privKeyA = "40505654708211189456746820883201845994248137211058198699828051064905928553035";
   ix privKeyB = "83862260130769358743610306176715755043868098730045613807339143668249321773381";
 
-  auto p2G = point_double(G, mod_global);
+  // auto p2G = point_double(G, mod_global);
 
-  std::cout << "singular double of G: ";
-  {
-    perf_ _("affine");
+  // std::cout << "singular double of G: ";
+  // {
+  //   perf_ _("affine");
 
-    // point_double(point_double(G, mod_global), mod_global).print();
-    point_add(G, p2G, mod_global).print();
-  }
+  //   // point_double(point_double(G, mod_global), mod_global).print();
+  //   point_add(G, p2G, mod_global).print();
+  // }
 
-  std::cout << "jacobian: ";
+  crv_p pubKeyA = double_and_add(G, privKeyA, mod_global);
+  // pubKeyA.print();
+  crv_p pubKeyB = double_and_add(G, privKeyB, mod_global);
+  // pubKeyB.print();
+
+  jcbn_crv_p pubKeyAJ = to_jacobian(pubKeyA);
+  jcbn_crv_p pubKeyBJ = to_jacobian(pubKeyB);
+
+  std::cout << "jacobian: \n";
   {
     perf_ _("jacobian");
-    // from_jacobian(point_double(point_double(to_jacobian(G), mod_global), mod_global), mod_global).print();
-    from_jacobian(point_add(to_jacobian(G), to_jacobian(p2G), mod_global), mod_global).print();
+    jcbn_crv_p shared_secretAJ = double_and_add(pubKeyBJ, privKeyA, mod_global);
+    jcbn_crv_p shared_secretBJ = double_and_add(pubKeyAJ, privKeyB, mod_global);
+    from_jacobian(shared_secretAJ, mod_global).print();
+    from_jacobian(shared_secretBJ, mod_global).print();
   }
 
-  // crv_p pubKeyA = double_and_add(G, privKeyA, mod_global);
-  // pubKeyA.print();
-  // crv_p pubKeyB = double_and_add(G, privKeyB, mod_global);
-  // pubKeyB.print();
-  // jcbn_crv_p pubKeyAJ = to_jacobian(pubKeyA);
-  // jcbn_crv_p pubKeyBJ = to_jacobian(pubKeyB);
-  // jcbn_crv_p shared_secretAJ = double_and_add(pubKeyBJ, privKeyA, mod_global);
-  // jcbn_crv_p shared_secretBJ = double_and_add(pubKeyAJ, privKeyB, mod_global);
-  // crv_p shared_secretA = double_and_add(pubKeyB, privKeyA, mod_global);
-  // crv_p shared_secretB = double_and_add(pubKeyA, privKeyB, mod_global);
-  // std::cout << "shared secrets: \n";
-  // shared_secretA.print();
-  // shared_secretB.print();
-  // from_jacobian(shared_secretAJ, mod_global).print();
-  // from_jacobian(shared_secretBJ, mod_global).print();
+  std::cout << "affine: \n";
+  {
+    perf_ _("affine");
+    crv_p shared_secretA = double_and_add(pubKeyB, privKeyA, mod_global);
+    crv_p shared_secretB = double_and_add(pubKeyA, privKeyB, mod_global);
+    shared_secretA.print();
+    shared_secretB.print();
+  }
 
   return 0;
 }
