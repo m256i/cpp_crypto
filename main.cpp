@@ -1,10 +1,13 @@
 // #include "bigint.hpp"
 
 #include <assert.h>
+#include <cmath>
 #include <exception>
 #include <iostream>
 #include <stdlib.h>
 #include <chrono>
+#include <vector>
+#include <bitset>
 
 #include "crypto.h"
 
@@ -100,6 +103,10 @@ struct crv_p
     y.write();
     std::cout << "]\n";
   }
+
+  bool operator==(const crv_p& other) const {
+    return (x == other.x) && (y == other.y); 
+  }
 };
 
 struct jcbn_crv_p
@@ -117,6 +124,11 @@ struct jcbn_crv_p
     z.write();
     std::cout << "]\n";
   }
+
+  bool operator==(const jcbn_crv_p& other) const {
+    return (x == other.x) && (y == other.y) && (z == other.z); 
+  }
+
 };
 
 jcbn_crv_p
@@ -137,6 +149,10 @@ from_jacobian(const jcbn_crv_p& _jcbn, const ix& _p)
 jcbn_crv_p
 point_double(const jcbn_crv_p& _p1, const ix& _p)
 {
+  if (_p1 == jcbn_crv_p{0,0,1}) {
+    return {0,0,1};
+  }
+
   const ix a = mod((_p1.x * 4) * _p1.y.pow(2), _p);
   const ix b = mod(_p1.x.pow(2) * 3, _p);
 
@@ -153,6 +169,10 @@ point_double(const jcbn_crv_p& _p1, const ix& _p)
 jcbn_crv_p
 point_add(const jcbn_crv_p& _p1, const jcbn_crv_p& _p2, const ix& _p)
 {
+  if (_p1 == _p2) {
+    return point_double(_p1, _p);
+  }
+
   const ix U1 = _p1.x * _p2.z.pow(2);
   const ix U2 = _p2.x * _p1.z.pow(2);
   const ix S1 = _p1.y * _p2.z.pow(3);
@@ -171,15 +191,6 @@ point_add(const jcbn_crv_p& _p1, const jcbn_crv_p& _p2, const ix& _p)
 }
 
 [[gnu::pure]] inline crv_p
-point_add(const crv_p& _p1, const crv_p& _p2, const ix& _p) noexcept
-{
-  const ix s = mod((_p2.y - _p1.y) * modinv(_p2.x - _p1.x, _p), _p);
-  ix x3      = mod((s.pow(2) - _p1.x - _p2.x), _p);
-  ix y3      = mod(s * (_p1.x - x3) - _p1.y, _p);
-  return {x3, y3};
-}
-
-[[gnu::pure]] inline crv_p
 point_double(const crv_p& _p1, const ix& _p) noexcept
 {
   const ix& x2 = _p1.x;
@@ -188,6 +199,19 @@ point_double(const crv_p& _p1, const ix& _p) noexcept
   ix x3 = mod((s.pow(2) - _p1.x - x2), _p);
   ix y3 = mod((s * (_p1.x - x3) - _p1.y), _p);
 
+  return {x3, y3};
+}
+
+[[gnu::pure]] inline crv_p
+point_add(const crv_p& _p1, const crv_p& _p2, const ix& _p) noexcept
+{
+  if (_p1 == _p2) {
+    return point_double(_p1, _p);
+  }
+
+  const ix s = mod((_p2.y - _p1.y) * modinv(_p2.x - _p1.x, _p), _p);
+  ix x3      = mod((s.pow(2) - _p1.x - _p2.x), _p);
+  ix y3      = mod(s * (_p1.x - x3) - _p1.y, _p);
   return {x3, y3};
 }
 
@@ -249,7 +273,6 @@ double_and_add(const jcbn_crv_p& _p1, const ix& _num, const ix& _p)
     }
     else
     {
-
       _p3 = point_double(_p3, _p);
     }
   }
@@ -259,26 +282,73 @@ double_and_add(const jcbn_crv_p& _p1, const ix& _num, const ix& _p)
 
 static constexpr std::size_t window_size = 4;
 
-jcbn_crv_p
-windowed_add(const std::vector<jcbn_crv_p>& _precomp, const jcbn_crv_p& _p1, const ix& _num, const ix& _p)
+std::vector<jcbn_crv_p> precompute(const jcbn_crv_p& Q, const ix& _p)
 {
-  jcbn_crv_p Q  = {0, 0, 1};
+  const std::size_t count = (std::size_t)std::pow(2, window_size) - 1;
+  std::vector<jcbn_crv_p> out{};
+  out.reserve(count);
+
+  out.push_back({0,0,0});                   // O
+  out.push_back(Q);                         // 1P
+  jcbn_crv_p next{ point_double(Q, _p) };   // 2P
+
+  for (std::size_t i = 0; i != count; ++i)
+  {
+    out.push_back(next);
+    next = point_add(Q, next, _p);         // ++P
+  }
+
+  std::printf("size of precomp table: %lu\n", out.size());
+  // precomp now {O, 1P, 2P, 3P, ..., (2^w-1)P} -> size 16 for w = 4
+
+  return out;
+}
+
+jcbn_crv_p
+windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, const ix& _p)
+{
+  jcbn_crv_p Q{0,0,1};
+
   std::size_t m = bits_to_represent(_num) / window_size;
 
-  for (std::size_t i = m; i != 0; --i)
+  // while ((m * window_size) < bits_to_represent(_num))
+  // {
+  //   ++m;
+  // }
+
+  // std::printf("bits_to_represent(_num): %lu\n", bits_to_represent(_num));
+  // std::printf("w: %lu\n", window_size);
+  // std::printf("m: %lu\n", m);
+  // std::printf("precomp size: %lu\n", _precomp.size());
+  // _num.writeb();
+  // std::puts("");
+
+  for (std::size_t i = 0; i < m; ++i)
   {
-    for (std::size_t j = 0; j != window_size; ++j)
-    {
+    for (auto j = 0ul; j != window_size; ++j) {
       Q = point_double(Q, _p);
     }
-    if () }
+
+    //std::printf("(m-i-1) %d\n", ((signed)m - (signed)i - 1));
+
+    const std::size_t nbits = _num.get_bits(((signed)m - (signed)i - 1) * window_size, window_size);
+    
+    //std::cout << std::bitset<4>(nbits);
+
+    if (nbits > 0) {      
+      Q = point_add(Q, _precomp[nbits], _p);
+    }
+  }
+    std::puts("");
+
+  return Q;
 }
 
 /*
   BIG DISCLAIMER: UNFINISHED AND NOT TESTED!!!
 
   TODO:
-    - add better scaler multiply
+    - add better scalar multiply
     - use actually usable BigInt libary that has reasonable performance
 
 */
@@ -294,15 +364,6 @@ main()
   ix privKeyA = "40505654708211189456746820883201845994248137211058198699828051064905928553035";
   ix privKeyB = "83862260130769358743610306176715755043868098730045613807339143668249321773381";
 
-  // auto p2G = point_double(G, mod_global);
-
-  // std::cout << "singular double of G: ";
-  // {
-  //   perf_ _("affine");
-
-  //   // point_double(point_double(G, mod_global), mod_global).print();
-  //   point_add(G, p2G, mod_global).print();
-  // }
 
   crv_p pubKeyA = double_and_add(G, privKeyA, mod_global);
   // pubKeyA.print();
@@ -319,6 +380,20 @@ main()
     jcbn_crv_p shared_secretBJ = double_and_add(pubKeyAJ, privKeyB, mod_global);
     from_jacobian(shared_secretAJ, mod_global).print();
     from_jacobian(shared_secretBJ, mod_global).print();
+  }
+
+  const auto precomp = precompute(pubKeyBJ, mod_global);
+  //const auto precomp2 = precompute(pubKeyBJ, mod_global);
+
+  std::cout << "jacobian windowed: \n";
+  {
+    perf_ _("jacobian windowed");
+    
+    jcbn_crv_p shared_secretAJ = windowed_scalar_mul(precomp, privKeyA, mod_global);
+    //jcbn_crv_p shared_secretBJ = windowed_scalar_mul(precomp2, pubKeyAJ, privKeyB, mod_global);
+
+    from_jacobian(shared_secretAJ, mod_global).print();
+    //from_jacobian(shared_secretBJ, mod_global).print();
   }
 
   std::cout << "affine: \n";

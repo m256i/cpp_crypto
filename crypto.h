@@ -2,6 +2,11 @@
 
 #include "gmpxx.h"
 
+#include <algorithm>
+#include <cassert>
+#include <cstddef>
+#include <iostream>
+
 namespace blue_crypto
 {
 
@@ -134,7 +139,36 @@ public:
   unsigned char
   get_bit(size_t bitIndex) const
   {
+    if (bitIndex >= bitlength())
+    {
+      return 0;
+    }
+
     return mpz_tstbit(value_, bitIndex);
+  }
+
+  std::size_t get_bits(std::size_t start_bit,  std::size_t num_bits) const 
+  {
+    
+    std::size_t out{0};
+
+    for (std::size_t i = 0; i != num_bits; i++) 
+    {
+      out |= (get_bit(start_bit + i) << (i));
+    }
+
+    return out;
+  }
+
+  std::size_t get_bits2(std::size_t start_bit,  std::size_t num_bits) const 
+  {
+    std::string bin_rep{mpz_get_str(nullptr, 2, value_)};
+    std::reverse(bin_rep.begin(), bin_rep.end());
+
+    std::string cut = bin_rep.substr(start_bit, num_bits);
+    std::reverse(cut.begin(), cut.end());
+
+    return std::stoi(cut, nullptr, 2);
   }
 
   size_t
@@ -153,6 +187,14 @@ public:
   write() const
   {
     char* str = mpz_get_str(nullptr, 10, value_);
+    std::cout << str;
+    free(str);
+  }
+  
+  void
+  writeb() const
+  {
+    char* str = mpz_get_str(nullptr, 2, value_);
     std::cout << str;
     free(str);
   }
