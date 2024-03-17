@@ -10,7 +10,7 @@ def get_bits(number, lsb, offset):
 def bits_to_represent(num):
     return  len(str(bin(num)[2:]))
 
-  
+
 def stupi_mul(k, P):
   window_size = 4 # window size
   n = bits_to_represent(k)

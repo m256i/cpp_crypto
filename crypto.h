@@ -81,7 +81,7 @@ public:
   GmpWrapper
   operator/(const GmpWrapper& other) const
   {
-    if (mpz_sgn(other.value_) == 0)
+    if (other == 0)
     {
       // Handle division by zero
       throw std::invalid_argument("Division by zero");
@@ -147,12 +147,13 @@ public:
     return mpz_tstbit(value_, bitIndex);
   }
 
-  std::size_t get_bits(std::size_t start_bit,  std::size_t num_bits) const 
+  std::size_t
+  get_bits(std::size_t start_bit, std::size_t num_bits) const
   {
-    
+
     std::size_t out{0};
 
-    for (std::size_t i = 0; i != num_bits; i++) 
+    for (std::size_t i = 0; i != num_bits; i++)
     {
       out |= (get_bit(start_bit + i) << (i));
     }
@@ -160,7 +161,8 @@ public:
     return out;
   }
 
-  std::size_t get_bits2(std::size_t start_bit,  std::size_t num_bits) const 
+  std::size_t
+  get_bits2(std::size_t start_bit, std::size_t num_bits) const
   {
     std::string bin_rep{mpz_get_str(nullptr, 2, value_)};
     std::reverse(bin_rep.begin(), bin_rep.end());
@@ -190,7 +192,7 @@ public:
     std::cout << str;
     free(str);
   }
-  
+
   void
   writeb() const
   {
