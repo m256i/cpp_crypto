@@ -5,6 +5,7 @@
 #include <iostream>
 #include <chrono>
 #include <vector>
+#include <bitset>
 #include "crypto.h"
 
 using namespace blue_crypto;
@@ -96,16 +97,15 @@ struct crv_p
   void
   print() const
   {
-
-    debug_value.write();
-
-    std::cout << " : ";
-
     std::cout << "[";
     x.write();
     std::cout << ", ";
     y.write();
-    std::cout << "]\n";
+    std::cout << "]";
+
+    std::cout << " (";
+    debug_value.write();
+    std::cout << ")\n";
   }
 
   bool
@@ -130,17 +130,17 @@ struct jcbn_crv_p
   void
   print() const
   {
-    debug_value.write();
-
-    std::cout << " : ";
-
     std::cout << "[";
     x.write();
     std::cout << ", ";
     y.write();
     std::cout << ", ";
     z.write();
-    std::cout << "]\n";
+    std::cout << "]";
+
+    std::cout << " (";
+    debug_value.write();
+    std::cout << ")\n";
   }
 
   bool
@@ -157,7 +157,7 @@ struct jcbn_crv_p
 };
 
 static const crv_p a_identity_element      = {0, 0};
-static const jcbn_crv_p j_identity_element = {0, 0, 1};
+static const jcbn_crv_p j_identity_element = {1, 1, 0};
 
 jcbn_crv_p
 to_jacobian(const crv_p& _ws_point)
@@ -168,9 +168,9 @@ to_jacobian(const crv_p& _ws_point)
 crv_p
 from_jacobian(const jcbn_crv_p& _jcbn, const ix& _p)
 {
-  if (_jcbn == j_identity_element)
+  if (_jcbn == j_identity_element ||_jcbn.z == 0)
   {
-    return {0, 0};
+    return {0, 0, _jcbn.debug_value};
   }
 
   ix inv = modinv(_jcbn.z, _p);
@@ -182,49 +182,21 @@ from_jacobian(const jcbn_crv_p& _jcbn, const ix& _p)
 jcbn_crv_p
 point_double(const jcbn_crv_p& _p1, const ix& _p)
 {
-  if (_p1 == jcbn_crv_p{0, 0, 1})
-  {
-    std::cout << "recieved O in doubling!\n";
-    return {0, 0, 1};
+  if (_p1.y == 0) {
+    std::cout << "y = 0 in point doubling!\n";
+    return {0,0,1};
   }
 
-  const ix a = ((_p1.x * 4) * _p1.y.pow(2));
-  const ix b = (_p1.x.pow(2) * 3);
-
-  std::cout << "------------- point double -------------\n";
-
-  std::cout << "  a: ";
-  a.write();
-  std::cout << "\n";
-  std::cout << "  b: ";
-  b.write();
-  std::cout << "\n\n";
+  const ix a = (_p1.x * 4) * _p1.y.pow(2);
+  const ix b = _p1.x.pow(2) * 3 /* + a * _p1.z.pow(4) */;
 
   jcbn_crv_p out;
 
-  out.x = ((a * -2) + b.pow(2)) % _p;
-
-  std::cout << "  x: ";
-  out.x.write();
-  std::cout << "\n";
-
+  out.x = (b.pow(2) - 2 * a) % _p;
   out.y = ((_p1.y.pow(4) * -8) + b * (a - out.x)) % _p;
-
-  std::cout << "  y: ";
-  out.y.write();
-  std::cout << "\n";
-
   out.z = (_p1.y * _p1.z * 2) % _p;
-  if (out.z == 0)
-  {
-    out.z = 1;
-  }
 
-  std::cout << "  z: ";
-  out.z.write();
-  std::cout << "\n";
-
-  out.debug_value = (_p1.debug_value * 2) % _p;
+  out.debug_value = (_p1.debug_value * 2) /* % _p*/;
 
   return out;
 }
@@ -233,46 +205,54 @@ point_double(const jcbn_crv_p& _p1, const ix& _p)
 jcbn_crv_p
 point_add(const jcbn_crv_p& _p1, const jcbn_crv_p& _p2, const ix& _p)
 {
-  if (_p1 == _p2)
+  if (_p1 == j_identity_element) 
   {
-    std::cout << "recieved same point in addition!\n";
-    return point_double(_p1, _p);
+    return {_p2.x, _p2.y, _p2.z, _p1.debug_value + _p2.debug_value};
   }
-
-  if (_p1 == jcbn_crv_p{0, 0, 1})
+  else if (_p2 == j_identity_element)
   {
-    std::cout << "recieved O p1 in addition!\n";
-    return _p2;
+    return {_p1.x, _p1.y, _p1.z, _p1.debug_value + _p2.debug_value};
   }
-
-  if (_p2 == jcbn_crv_p{0, 0, 1})
-  {
-    std::cout << "recieved O p2 in addition!\n";
-    return _p1;
-  }
-
-  assert(_p1 != j_identity_element && _p2 != j_identity_element);
 
   const ix U1 = _p1.x * _p2.z.pow(2);
   const ix U2 = _p2.x * _p1.z.pow(2);
   const ix S1 = _p1.y * _p2.z.pow(3);
   const ix S2 = _p2.y * _p1.z.pow(3);
 
+  std::cout << "  point add U1: " << U1 << "\n";
+  std::cout << "  point add U2: " << U2 << "\n";
+  std::cout << "  point add S1: " << S1 << "\n";
+  std::cout << "  point add S1: " << S2 << "\n";
+
+  if (U1 == U2)
+  {
+    if (S1 != S2) {
+      return {j_identity_element.x, j_identity_element.y, j_identity_element.z, _p1.debug_value + _p2.debug_value };
+    }
+    else {
+      std::cout << "same point recived in add!\n";
+      return point_double(_p1, _p);
+    }
+  }
+
   jcbn_crv_p out;
 
   const ix H = (U2 - U1);
   const ix R = (S2 - S1);
 
+  std::cout << "  point add H: " << H << "\n";
+  std::cout << "  point add R: " << R << "\n";
+
   out.x = (R.pow(2) - H.pow(3) - 2 * U1 * H.pow(2)) % _p;
   out.y = (R * (U1 * H.pow(2) - out.x) - S1 * H.pow(3)) % _p;
   out.z = (H * _p1.z * _p2.z) % _p;
-
-  if (out.z == 0)
+  
+  if (out.z == 0) [[unlikely]]
   {
-    out.z = 1;
+    out = j_identity_element;
   }
 
-  out.debug_value = (_p1.debug_value + _p2.debug_value) % _p;
+  out.debug_value = (_p1.debug_value + _p2.debug_value) /* % _p*/;
 
   return out;
 }
@@ -306,7 +286,13 @@ point_add(const crv_p& _p1, const crv_p& _p2, const ix& _p) noexcept
 [[gnu::pure]] inline std::size_t
 bits_to_represent(ix _num) noexcept
 {
-  return _num.bitlength() - _num.count_trailing_zeros();
+  // std::cout << "bits_to_represent(): num = " << _num << "\n";
+  // _num.writeb();
+  // std::cout << "\n";
+  // std::cout << "_num.bitlength(): " << _num.bitlength() << "\n";
+  // std::cout << "_num._num.count_trailing_zeros(): " << _num.count_trailing_zeros() << "\n";
+
+  return _num.bitlength(); // - _num.count_trailing_zeros();
 }
 
 [[gnu::pure]] inline bool
@@ -353,7 +339,7 @@ double_and_add(const jcbn_crv_p& _p1, const ix& _num, const ix& _p)
   const jcbn_crv_p _p2   = _p1;
   jcbn_crv_p _p3         = _p1;
 
-  for (std::size_t i = 1; i != bits; ++i)
+  for (std::size_t i = 2; i != bits + 1; ++i)
   {
     if (is_bit_set(_num, bits - i))
     {
@@ -374,11 +360,13 @@ static constexpr std::size_t window_size = 4;
 std::vector<jcbn_crv_p>
 precompute(const jcbn_crv_p& Q, const ix& _p)
 {
+  std::cout << "--------------- precomp ---------------\n";
+
   const std::size_t count = (std::size_t)std::pow(2, window_size);
   std::vector<jcbn_crv_p> out;
   out.reserve(count);
 
-  out.push_back({0, 0, 1});
+  out.push_back(j_identity_element);
   out.push_back(Q);
 
   jcbn_crv_p next{Q}; // 2P
@@ -394,6 +382,8 @@ precompute(const jcbn_crv_p& Q, const ix& _p)
     out.push_back(next);
 
     std::cout << "  result: ";
+    from_jacobian(next, _p).print();
+    std::cout << "     ";
     next.print();
   }
 
@@ -402,8 +392,10 @@ precompute(const jcbn_crv_p& Q, const ix& _p)
   {
     std::cout << i << " G: ";
     from_jacobian(out[i], _p).print();
-    out[i].print();
+    //out[i].print();
   }
+
+   std::cout << "---------------------------------------\n\n";
 
   // precomp now {O, 1P, 2P, 3P, ..., (2^w-1)P} -> size 16 for w = 4
 
@@ -413,7 +405,9 @@ precompute(const jcbn_crv_p& Q, const ix& _p)
 jcbn_crv_p
 windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, const ix& _p)
 {
-  jcbn_crv_p Q{0, 0, 1};
+  std::cout << "---------- windowed_scalar_mul ----> " << _num << "P \n";
+
+  jcbn_crv_p Q{j_identity_element};
 
   int current_q = 0;
 
@@ -424,28 +418,33 @@ windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, con
     ++m;
   }
 
-  // std::printf("bits_to_represent(_num): %lu\n", bits_to_represent(_num));
-  // std::printf("w: %lu\n", window_size);
-  // std::printf("m: %lu\n", m);
-  // std::printf("precomp size: %lu\n", _precomp.size());
-  // _num.writeb();
-  // std::puts("");
-
   for (std::size_t i = 0; i != m; ++i)
   {
+    std::cout << "  > next iteration i: " << i << "\n";
 
-    std::cout << current_q << "Q ->";
+    std::cout << "    "<< current_q << "Q: ";
     from_jacobian(Q, _p).print();
 
-    const std::size_t nbits = _num.get_bits(((signed)m - (signed)i - 1) * window_size, window_size);
+    const std::size_t start_idx = ((signed)m - (signed)i - 1) * window_size;
+    std::cout << "bits start index: " << start_idx << "\n";
+
+    const std::size_t nbits = _num.get_bits2(start_idx, window_size);
+
+    std::cout << "    current bits: " << std::bitset<window_size>(nbits) << " (" << nbits << ") \n";
+
 
     if (nbits > 0)
     {
+      std::cout << "    " <<current_q << "Q + " << nbits << "Q = ";
+      std::cout << "      "; Q.print();
+      std::cout << "      "; _precomp[nbits].print();
+
 
       Q = point_add(Q, _precomp[nbits], _p);
       current_q += nbits;
 
-      std::cout << "Q added " << nbits << " -> " << current_q << "Q ";
+      std::cout << current_q << "Q ";
+
       from_jacobian(Q, _p).print();
 
       if (i < m - 1)
@@ -453,20 +452,19 @@ windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, con
         for (auto j = 0ul; j != window_size; ++j)
         {
           Q = point_double(Q, _p);
-          current_q *= 2;
+          
 
-          std::cout << "Q doubled "
-                    << " -> " << current_q << "Q ";
+          current_q *= 2;
+          std::cout << "Q doubled " << " -> " << current_q << "Q ";
           from_jacobian(Q, _p).print();
         }
       }
     }
-
-    // std::printf("(m-i-1) %lu\n", ((signed)m - (signed)i - 1) * window_size);
-    // std::cout << std::bitset<4>(nbits) << "\n";
   }
 
   std::puts("");
+
+  std::cout << "-----------------------------------------\n\n";
 
   return Q;
 }
@@ -474,20 +472,17 @@ windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, con
 int
 main()
 {
-  // ix mod_global = "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f";
-
-  // crv_p G = {"0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-  //            "0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8"};
-
-  // ix privKeyA = "40505654708211189456746820883201845994248137211058198699828051064905928553035";
-  // ix privKeyB = "83862260130769358743610306176715755043868098730045613807339143668249321773381";
+  //x mod_global = "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f";
+  //crv_p G = {"0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+  //           "0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8", 1};
+  //ix privKeyA = "0x598D635BD02C77CC3020CFFD744D4D75D190C41E726D16C2FE2F5A1F06AC324B";
+  //ix privKeyB = "0xb9685b6ee0405eb5389c9b9d29404357eec208f05471b21e58dad170371f9945";
+  //const auto G_precomp = precompute(to_jacobian(G), mod_global);
 
   ix mod_global{17};
   jcbn_crv_p G = {15, 13, 1, 1};
-
-  ix privKeyA = 5;
-  ix privKeyB = 9;
-
+  ix privKeyA = 321;
+  ix privKeyB = 54353;
   const auto G_precomp = precompute(G, mod_global);
 
   jcbn_crv_p pubKeyA = windowed_scalar_mul(G_precomp, privKeyA, mod_global);
@@ -496,25 +491,17 @@ main()
   std::cout << "--------- pubkeys ---------\n";
 
   from_jacobian(pubKeyA, mod_global).print();
-  pubKeyA.print();
+  //pubKeyA.print();
   from_jacobian(pubKeyB, mod_global).print();
-  pubKeyB.print();
-
+  // pubKeyB.print();
   std::cout << "---------------------------\n";
 
   jcbn_crv_p pubKeyAJ = pubKeyA;
   jcbn_crv_p pubKeyBJ = pubKeyB;
 
-  std::cout << "jacobian: \n";
-  {
-    perf_ _("jacobian");
-    jcbn_crv_p shared_secretAJ = double_and_add(pubKeyBJ, privKeyA, mod_global);
-    jcbn_crv_p shared_secretBJ = double_and_add(pubKeyAJ, privKeyB, mod_global);
-    from_jacobian(shared_secretAJ, mod_global).print();
-    from_jacobian(shared_secretBJ, mod_global).print();
-  }
 
   const auto precomp = precompute(pubKeyBJ, mod_global);
+  const auto precomp2 = precompute(pubKeyAJ, mod_global);
   // const auto precomp2 = precompute(pubKeyBJ, mod_global);
 
   std::cout << "jacobian windowed: \n";
@@ -522,19 +509,30 @@ main()
     perf_ _("jacobian windowed");
 
     jcbn_crv_p shared_secretAJ = windowed_scalar_mul(precomp, privKeyA, mod_global);
+    jcbn_crv_p shared_secretBJ = windowed_scalar_mul(precomp2, privKeyB, mod_global);
+
     from_jacobian(shared_secretAJ, mod_global).print();
+    from_jacobian(shared_secretBJ, mod_global).print();
+
+  std::cout << "--------- pubkeys ---------\n";
+
+  from_jacobian(pubKeyA, mod_global).print();
+  //pubKeyA.print();
+  from_jacobian(pubKeyB, mod_global).print();
+  // pubKeyB.print();
+  std::cout << "---------------------------\n";
 
     // jcbn_crv_p shared_secretBJ = windowed_scalar_mul(precomp2, pubKeyAJ, privKeyB, mod_global);
     // from_jacobian(shared_secretBJ, mod_global).print();
   }
 
-  // std::cout << "affine: \n";
+  // std::cout << "jacobian: \n";
   // {
-  //   perf_ _("affine");
-  //   crv_p shared_secretA = double_and_add(pubKeyB, privKeyA, mod_global);
-  //   crv_p shared_secretB = double_and_add(pubKeyA, privKeyB, mod_global);
-  //   shared_secretA.print();
-  //   shared_secretB.print();
+  //   perf_ _("jacobian");
+  //   jcbn_crv_p shared_secretAJ = double_and_add(pubKeyBJ, privKeyA, mod_global);
+  //   jcbn_crv_p shared_secretBJ = double_and_add(pubKeyAJ, privKeyB, mod_global);
+  //   from_jacobian(shared_secretAJ, mod_global).print();
+  //   from_jacobian(shared_secretBJ, mod_global).print();
   // }
 
   return 0;
