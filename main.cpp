@@ -187,8 +187,8 @@ point_double(const jcbn_crv_p& _p1, const ix& _p)
     return {0,0,1};
   }
 
-  const ix a = (_p1.x * 4) * _p1.y.pow(2);
-  const ix b = _p1.x.pow(2) * 3 /* + a * _p1.z.pow(4) */;
+  const ix a = (_p1.x * 4) * _p1.y.pow(2) % _p;
+  const ix b = _p1.x.pow(2) * 3 % _p /* + a * _p1.z.pow(4) */;
 
   jcbn_crv_p out;
 
@@ -214,15 +214,15 @@ point_add(const jcbn_crv_p& _p1, const jcbn_crv_p& _p2, const ix& _p)
     return {_p1.x, _p1.y, _p1.z, _p1.debug_value + _p2.debug_value};
   }
 
-  const ix U1 = _p1.x * _p2.z.pow(2);
-  const ix U2 = _p2.x * _p1.z.pow(2);
-  const ix S1 = _p1.y * _p2.z.pow(3);
-  const ix S2 = _p2.y * _p1.z.pow(3);
+  const ix U1 = _p1.x * _p2.z.pow(2) % _p;
+  const ix U2 = _p2.x * _p1.z.pow(2) % _p;
+  const ix S1 = _p1.y * _p2.z.pow(3) % _p;
+  const ix S2 = _p2.y * _p1.z.pow(3) % _p;
 
-  std::cout << "  point add U1: " << U1 << "\n";
-  std::cout << "  point add U2: " << U2 << "\n";
-  std::cout << "  point add S1: " << S1 << "\n";
-  std::cout << "  point add S1: " << S2 << "\n";
+  // std::cout << "  point add U1: " << U1 << "\n";
+  // std::cout << "  point add U2: " << U2 << "\n";
+  // std::cout << "  point add S1: " << S1 << "\n";
+  // std::cout << "  point add S1: " << S2 << "\n";
 
   if (U1 == U2)
   {
@@ -237,8 +237,8 @@ point_add(const jcbn_crv_p& _p1, const jcbn_crv_p& _p2, const ix& _p)
 
   jcbn_crv_p out;
 
-  const ix H = (U2 - U1);
-  const ix R = (S2 - S1);
+  const ix H = (U2 - U1) % _p;
+  const ix R = (S2 - S1) % _p;
 
   std::cout << "  point add H: " << H << "\n";
   std::cout << "  point add R: " << R << "\n";
@@ -366,10 +366,16 @@ precompute(const jcbn_crv_p& Q, const ix& _p)
   std::vector<jcbn_crv_p> out;
   out.reserve(count);
 
+
+  ix current_q = 0;
+
   out.push_back(j_identity_element);
+
+  current_q = 1;
+
   out.push_back(Q);
 
-  jcbn_crv_p next{Q}; // 2P
+  jcbn_crv_p next{Q}; // 1P
 
   for (std::size_t i = 0; i != count; ++i)
   {
@@ -380,6 +386,10 @@ precompute(const jcbn_crv_p& Q, const ix& _p)
 
     next = point_add(Q, next, _p); // ++P
     out.push_back(next);
+
+    current_q = current_q + 1;
+
+    assert(current_q == next.debug_value);
 
     std::cout << "  result: ";
     from_jacobian(next, _p).print();
@@ -409,7 +419,7 @@ windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, con
 
   jcbn_crv_p Q{j_identity_element};
 
-  int current_q = 0;
+  ix current_q = 0;
 
   std::size_t m = bits_to_represent(_num) / window_size;
 
@@ -420,6 +430,7 @@ windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, con
 
   for (std::size_t i = 0; i != m; ++i)
   {
+  
     std::cout << "  > next iteration i: " << i << "\n";
 
     std::cout << "    "<< current_q << "Q: ";
@@ -441,7 +452,7 @@ windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, con
 
 
       Q = point_add(Q, _precomp[nbits], _p);
-      current_q += nbits;
+      current_q = current_q + nbits;
 
       std::cout << current_q << "Q ";
 
@@ -452,19 +463,28 @@ windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, con
         for (auto j = 0ul; j != window_size; ++j)
         {
           Q = point_double(Q, _p);
-          
-
-          current_q *= 2;
+          current_q  =  current_q * 2;
           std::cout << "Q doubled " << " -> " << current_q << "Q ";
           from_jacobian(Q, _p).print();
         }
       }
     }
+
+    assert(current_q == Q.debug_value);
   }
 
   std::puts("");
 
+  if (current_q != _num) {
+    std::cout << "[error] : current_q != _num output not expected: \n";
+    std::cout << " current_q: " << current_q << "\n";
+    std::cout << "      _num: " << _num << "\n";
+    std::exit(1);
+  }
+
   std::cout << "-----------------------------------------\n\n";
+
+ // assert(Q.debug_value == Q.debug_value * _precomp[1].debug_value);
 
   return Q;
 }
@@ -472,33 +492,33 @@ windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, con
 int
 main()
 {
-  //x mod_global = "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f";
-  //crv_p G = {"0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-  //           "0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8", 1};
-  //ix privKeyA = "0x598D635BD02C77CC3020CFFD744D4D75D190C41E726D16C2FE2F5A1F06AC324B";
-  //ix privKeyB = "0xb9685b6ee0405eb5389c9b9d29404357eec208f05471b21e58dad170371f9945";
-  //const auto G_precomp = precompute(to_jacobian(G), mod_global);
+   ix mod_global = "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f";
+   crv_p G = {"0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+              "0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8", 1};
+   ix privKeyA = "0x598D635BD02C77CC3020CFFD744D4D75D190C41E726D16C2FE2F5A1F06AC324B";
+   ix privKeyB = "0xb9685b6ee0405eb5389c9b9d29404357eec208f05471b21e58dad170371f9945";
+   const auto G_precomp = precompute(to_jacobian(G), mod_global);
 
-  ix mod_global{17};
-  jcbn_crv_p G = {15, 13, 1, 1};
-  ix privKeyA = 321;
-  ix privKeyB = 54353;
-  const auto G_precomp = precompute(G, mod_global);
+   //ix mod_global{17};
+   //jcbn_crv_p G = {15, 13, 1, 1};
+   //ix privKeyA = 321;
+   //ix privKeyB = 67;
+   //const auto G_precomp = precompute(G, mod_global);
 
   jcbn_crv_p pubKeyA = windowed_scalar_mul(G_precomp, privKeyA, mod_global);
   jcbn_crv_p pubKeyB = windowed_scalar_mul(G_precomp, privKeyB, mod_global);
 
+
   std::cout << "--------- pubkeys ---------\n";
 
-  from_jacobian(pubKeyA, mod_global).print();
   //pubKeyA.print();
+  from_jacobian(pubKeyA, mod_global).print();
   from_jacobian(pubKeyB, mod_global).print();
   // pubKeyB.print();
   std::cout << "---------------------------\n";
 
   jcbn_crv_p pubKeyAJ = pubKeyA;
   jcbn_crv_p pubKeyBJ = pubKeyB;
-
 
   const auto precomp = precompute(pubKeyBJ, mod_global);
   const auto precomp2 = precompute(pubKeyAJ, mod_global);
