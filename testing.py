@@ -29,9 +29,7 @@ def stupi_mul(k, P):
     
     for j in range(window_size):
       Q = 2*Q
-    
-    print("(m-i-1) ", (m-i-1))
-    
+
     precomp_idx = get_bits(k, int(m-i-1)*window_size, window_size)
     
     if (precomp_idx > 0):
@@ -41,8 +39,6 @@ def stupi_mul(k, P):
       
   return Q
   
-print(stupi_mul(239085222, 200))
+print(stupi_mul(23029340, 23530))
 
 
-47817044400
-47817044400

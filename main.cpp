@@ -436,6 +436,14 @@ windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, con
     std::cout << "    "<< current_q << "Q: ";
     from_jacobian(Q, _p).print();
 
+    for (auto j = 0ul; j != window_size; ++j)
+    {
+      Q = point_double(Q, _p);
+      current_q  =  current_q * 2;
+      std::cout << "Q doubled " << " -> " << current_q << "Q ";
+      from_jacobian(Q, _p).print();
+    }
+
     const std::size_t start_idx = ((signed)m - (signed)i - 1) * window_size;
     std::cout << "bits start index: " << start_idx << "\n";
 
@@ -458,16 +466,16 @@ windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, con
 
       from_jacobian(Q, _p).print();
 
-      if (i < m - 1)
-      {
-        for (auto j = 0ul; j != window_size; ++j)
-        {
-          Q = point_double(Q, _p);
-          current_q  =  current_q * 2;
-          std::cout << "Q doubled " << " -> " << current_q << "Q ";
-          from_jacobian(Q, _p).print();
-        }
-      }
+      // if (i < m - 1)
+      // {
+      //   for (auto j = 0ul; j != window_size; ++j)
+      //   {
+      //     Q = point_double(Q, _p);
+      //     current_q  =  current_q * 2;
+      //     std::cout << "Q doubled " << " -> " << current_q << "Q ";
+      //     from_jacobian(Q, _p).print();
+      //   }
+      // }
     }
 
     assert(current_q == Q.debug_value);
