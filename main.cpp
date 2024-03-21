@@ -32,17 +32,17 @@ ix_abs(const ix& _n)
   return _n < 0 ? _n * -1 : _n;
 }
 
-[[gnu::pure]] ix
-mod(const ix& _na, const ix& _nb) noexcept
-{
-  ix result = _na % _nb;
-  return result;
-}
+// [[gnu::pure]] ix
+// mod(const ix& _na, const ix& _nb) noexcept
+// {
+//   ix result = _na % _nb;
+//   return result;
+// }
 
 [[gnu::pure]] std::pair<ix, ix>
 divmod(const ix& _na, const ix& _nb) noexcept
 {
-  return {_na / _nb, mod(_na, _nb)};
+  return {_na / _nb, _na % _nb};
 }
 
 [[gnu::pure]] std::pair<ix, ix>
@@ -83,16 +83,13 @@ extended_gcd(const ix& aa, const ix& bb) noexcept
 modinv(const ix& a, const ix& m) noexcept
 {
   assert(a != 0);
-
   const auto gx = extended_gcd(a, m);
-  return mod(gx.second, m);
+  return gx.second % m;
 }
 
 struct crv_p
 {
   ix x{}, y{};
-
-  ix debug_value{};
 
   void
   print() const
@@ -101,11 +98,7 @@ struct crv_p
     x.write();
     std::cout << ", ";
     y.write();
-    std::cout << "]";
-
-    std::cout << " (";
-    debug_value.write();
-    std::cout << ")\n";
+    std::cout << "]\n";
   }
 
   bool
@@ -134,11 +127,7 @@ struct jcbn_crv_p
     y.write();
     std::cout << ", ";
     z.write();
-    std::cout << "]";
-
-    // std::cout << " (";
-    // debug_value.write();
-    // std::cout << ")\n";
+    std::cout << "]\n";
   }
 
   bool
@@ -172,7 +161,7 @@ from_jacobian(const jcbn_crv_p& _jcbn, const ix& _p)
   }
 
   ix inv = modinv(_jcbn.z, _p);
-  return {mod(_jcbn.x * inv.pow(2), _p), mod(_jcbn.y * inv.pow(3), _p)};
+  return  {_jcbn.x * inv.pow(2) % _p, _jcbn.y * inv.pow(3) % _p};
 }
 
 /* NOTE when using curves where a != 0 this needs to be changed */
@@ -181,7 +170,6 @@ jcbn_crv_p
 point_double(const jcbn_crv_p& _p1, const ix& _p)
 {
   if (_p1.y == 0) [[unlikely]] {
-    // std::cout << "y = 0 in point doubling!\n";
     return j_identity_element;
   }
 
@@ -193,8 +181,6 @@ point_double(const jcbn_crv_p& _p1, const ix& _p)
   out.x = (b.pow(2) - 2 * a) % _p;
   out.y = ((_p1.y.pow(4) * -8) + b * (a - out.x)) % _p;
   out.z = (_p1.y * _p1.z * 2) % _p;
-
-  //out.debug_value = (_p1.debug_value * 2) /* % _p*/;
 
   return out;
 }
@@ -219,7 +205,7 @@ point_add(const jcbn_crv_p& _p1, const jcbn_crv_p& _p2, const ix& _p)
 
   if (U1 == U2) [[unlikely]]
   {
-    if (S1 != S2) /*very*/[[unlikely]] {
+    if (S1 != S2) [[unlikely]] {
       return j_identity_element;
     }
     else {
@@ -270,6 +256,7 @@ std::vector<jcbn_crv_p>
 precompute(const jcbn_crv_p& Q, const ix& _p)
 {
   const std::size_t count = (std::size_t)std::pow(2, window_size);
+  
   std::vector<jcbn_crv_p> out;
   out.reserve(count);
   
@@ -314,7 +301,6 @@ windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, con
       Q = point_add(Q, _precomp[nbits], _p);
     }
   }
-
   return Q;
 }
 
@@ -323,12 +309,13 @@ main()
 {
   ix mod_global = "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f";
   crv_p G = {"0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-             "0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8", 1};
-  // ix privKeyA = "0x598D635BD02C77CC3020CFFD744D4D75D190C41E726D16C2FE2F5A1F06AC324B";
-  // ix privKeyB = "0xb9685b6ee0405eb5389c9b9d29404357eec208f05471b21e58dad170371f9945";
+             "0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8"};
+  
+   ix privKeyA = "0x598D635BD02C77CC3020CFFD744D4D75D190C41E726D16C2FE2F5A1F06AC324B";
+   ix privKeyB = "0xb9685b6ee0405eb5389c9b9d29404357eec208f05471b21e58dad170371f9945";
 
-  ix privKeyA = "0x598D635BD02C77CC3020CFFD744D4D75D190C41E726D16C2FE2F5A1F06AC324B";
-  ix privKeyB = "0xb9685b6ee0405eb5389c94897d04357eec208f05471b21e58dad170371f9945";
+  //ix privKeyA = "0x598D635BD02C77CC3020CFFD744D4D75D190C41E726D16C2FE2F5A1F06AC324B";
+  //ix privKeyB = "0xb9685b6ee0405eb5389c94897d04357eec208f05471b21e58dad170371f9945";
   const auto G_precomp = precompute(to_jacobian(G), mod_global);
 
   //ix mod_global{17};
@@ -340,13 +327,9 @@ main()
   jcbn_crv_p pubKeyA = windowed_scalar_mul(G_precomp, privKeyA, mod_global);
   jcbn_crv_p pubKeyB = windowed_scalar_mul(G_precomp, privKeyB, mod_global);
 
-
   std::cout << "--------- pubkeys ---------\n";
-
-  //pubKeyA.print();
   from_jacobian(pubKeyA, mod_global).print();
   from_jacobian(pubKeyB, mod_global).print();
-  // pubKeyB.print();
   std::cout << "---------------------------\n";
 
   const jcbn_crv_p pubKeyAJ = pubKeyA;
@@ -354,9 +337,8 @@ main()
 
   const auto precomp = precompute(pubKeyBJ, mod_global);
   const auto precomp2 = precompute(pubKeyAJ, mod_global);
-  // const auto precomp2 = precompute(pubKeyBJ, mod_global);
 
- jcbn_crv_p shared_secretAJ, shared_secretBJ;
+  jcbn_crv_p shared_secretAJ, shared_secretBJ;
 
   std::cout << "jacobian windowed: \n";
   {
@@ -368,15 +350,6 @@ main()
   
   from_jacobian(shared_secretAJ, mod_global).print();
   from_jacobian(shared_secretBJ, mod_global).print();
-
-  // std::cout << "jacobian: \n";
-  // {
-  //   perf_ _("jacobian");
-  //   jcbn_crv_p shared_secretAJ = double_and_add(pubKeyBJ, privKeyA, mod_global);
-  //   jcbn_crv_p shared_secretBJ = double_and_add(pubKeyAJ, privKeyB, mod_global);
-  //   from_jacobian(shared_secretAJ, mod_global).print();
-  //   from_jacobian(shared_secretBJ, mod_global).print();
-  // }
 
   return 0;
 }
