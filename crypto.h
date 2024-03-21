@@ -150,7 +150,6 @@ public:
   std::size_t
   get_bits(std::size_t start_bit, std::size_t num_bits) const
   {
-
     std::size_t out{0};
 
     for (std::size_t i = 0; i != num_bits; i++)
@@ -166,20 +165,20 @@ public:
   {
     std::string bin_rep{mpz_get_str(nullptr, 2, value_)};
     
-    std::cout << "get_bits2() : bin_rep = " << bin_rep << "\n";
+   // std::cout << "get_bits2() : bin_rep = " << bin_rep << "\n";
 
     std::reverse(bin_rep.begin(), bin_rep.end());
 
-    std::cout << "get_bits2() : bin_rep reversed = " << bin_rep << "\n";
+    //std::cout << "get_bits2() : bin_rep reversed = " << bin_rep << "\n";
     
 
     std::string cut = bin_rep.substr(start_bit, num_bits);
 
-    std::cout << "get_bits2() : cut = " << cut << "\n";
+   // std::cout << "get_bits2() : cut = " << cut << "\n";
     
     
     std::reverse(cut.begin(), cut.end());
-    std::cout << "get_bits2() : cut reverse = " << cut << "\n";
+    //std::cout << "get_bits2() : cut reverse = " << cut << "\n";
 
     return std::stoi(cut, nullptr, 2);
   }
