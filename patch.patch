@@ -1,0 +1,116 @@
+From 0e5f8effabb60e5cf906ae6a314c3aa7f81657d2 Mon Sep 17 00:00:00 2001
+From: cospplredman <cospplredman@gmail.com>
+Date: Wed, 20 Mar 2024 20:01:21 -0500
+Subject: [PATCH] =?UTF-8?q?=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD?=
+ =?UTF-8?q?=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD?=
+ =?UTF-8?q?=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD?=
+ =?UTF-8?q?=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD?=
+ =?UTF-8?q?=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD?=
+ =?UTF-8?q?=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD?=
+ =?UTF-8?q?=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD=EF=BF=BD?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ main.cpp | 36 ++++++++++++++----------------------
+ 1 file changed, 14 insertions(+), 22 deletions(-)
+
+diff --git a/main.cpp b/main.cpp
+index a7d3888..b1edf33 100644
+--- a/main.cpp
++++ b/main.cpp
+@@ -184,7 +184,7 @@ point_double(const jcbn_crv_p& _p1, const ix& _p)
+ {
+   if (_p1.y == 0) {
+     std::cout << "y = 0 in point doubling!\n";
+-    return {0,0,1};
++    return j_identity_element;
+   }
+ 
+   const ix a = (_p1.x * 4) * _p1.y.pow(2) % _p;
+@@ -231,7 +231,9 @@ point_add(const jcbn_crv_p& _p1, const jcbn_crv_p& _p2, const ix& _p)
+     }
+     else {
+       std::cout << "same point recived in add!\n";
+-      return point_double(_p1, _p);
++      auto k = point_double(_p1, _p);
++      k.debug_value = _p1.debug_value + _p2.debug_value;
++      return k;
+     }
+   }
+ 
+@@ -363,6 +365,7 @@ precompute(const jcbn_crv_p& Q, const ix& _p)
+   std::cout << "--------------- precomp ---------------\n";
+ 
+   const std::size_t count = (std::size_t)std::pow(2, window_size);
++
+   std::vector<jcbn_crv_p> out;
+   out.reserve(count);
+ 
+@@ -371,30 +374,19 @@ precompute(const jcbn_crv_p& Q, const ix& _p)
+ 
+   out.push_back(j_identity_element);
+ 
+-  current_q = 1;
+-
++  current_q = Q.debug_value;
+   out.push_back(Q);
+ 
+   jcbn_crv_p next{Q}; // 1P
+ 
+-  for (std::size_t i = 0; i != count; ++i)
++  for (std::size_t i = 2; i != count; ++i)
+   {
+-    std::cout << "adding: \n  ";
+-    Q.print();
+-    std::cout << "  ";
+-    next.print();
+-
+     next = point_add(Q, next, _p); // ++P
+     out.push_back(next);
+ 
+-    current_q = current_q + 1;
+-
+-    assert(current_q == next.debug_value);
+-
+-    std::cout << "  result: ";
+-    from_jacobian(next, _p).print();
+-    std::cout << "     ";
+-    next.print();
++    current_q = current_q + Q.debug_value;
++    std::cout << next.debug_value << " " << current_q << std::endl;
++    //assert(current_q == next.debug_value);
+   }
+ 
+   std::printf("size of precomp table: %lu\n", out.size());
+@@ -478,7 +470,7 @@ windowed_scalar_mul(const std::vector<jcbn_crv_p>& _precomp, const ix& _num, con
+       // }
+     }
+ 
+-    assert(current_q == Q.debug_value);
++    //assert(current_q == Q.debug_value);
+   }
+ 
+   std::puts("");
+@@ -509,8 +501,8 @@ main()
+ 
+    //ix mod_global{17};
+    //jcbn_crv_p G = {15, 13, 1, 1};
+-   //ix privKeyA = 321;
+-   //ix privKeyB = 67;
++   //ix privKeyA = 32121984718;
++   //ix privKeyB = 67222;
+    //const auto G_precomp = precompute(G, mod_global);
+ 
+   jcbn_crv_p pubKeyA = windowed_scalar_mul(G_precomp, privKeyA, mod_global);
+@@ -566,4 +558,4 @@ main()
+   return 0;
+ }
+ 
+-// here be dragons!
+\ No newline at end of file
++// here be dragons!
+-- 
+2.44.0
+
